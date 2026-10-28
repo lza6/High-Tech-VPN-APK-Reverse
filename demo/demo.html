@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>High Tech VPN v1.7 · 逆向演示</title>
+<style>
+  :root{--bg:#0b0f14;--card:#131a23;--line:#1f2a36;--fg:#e6edf5;--dim:#8b9bb0;
+        --ok:#31c48d;--warn:#f0b429;--bad:#ef5350;--acc:#4f9cf9}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#16202c,#0b0f14 60%);
+       color:var(--fg);font:14px/1.6 -apple-system,"Segoe UI",system-ui,"Microsoft YaHei",sans-serif}
+  header{padding:28px 32px 12px}
+  h1{margin:0 0 6px;font-size:20px;letter-spacing:.3px}
+  .sub{color:var(--dim);font-size:13px}
+  .wrap{padding:0 32px 48px;max-width:1280px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px;margin-top:20px}
+  .card{background:linear-gradient(180deg,#151d27,#111823);border:1px solid var(--line);
+        border-radius:14px;padding:16px 16px 14px;position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;
+        background:linear-gradient(90deg,var(--acc),transparent)}
+  .card h3{margin:0 0 4px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .tag{font-size:11px;padding:1px 7px;border-radius:99px;border:1px solid var(--line);color:var(--dim)}
+  .kv{display:grid;grid-template-columns:88px 1fr;gap:2px 10px;margin:10px 0 0;font-size:12.5px}
+  .kv span{color:var(--dim)}
+  .kv b{font-weight:500;word-break:break-all;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .pill{font-size:12px;padding:3px 9px;border-radius:8px;background:#0e1520;border:1px solid var(--line)}
+  .ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+  button{background:#18222e;color:var(--fg);border:1px solid var(--line);border-radius:9px;
+         padding:6px 12px;font-size:12.5px;cursor:pointer;transition:.15s}
+  button:hover{border-color:var(--acc);color:var(--acc)}
+  button:disabled{opacity:.5;cursor:default}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:22px}
+  .panel h2{margin:0 0 10px;font-size:15px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+  th{color:var(--dim);font-weight:500}
+  code{background:#0d141d;padding:1px 5px;border-radius:5px;font-size:12px}
+  pre{margin:8px 0 0;background:#0d141d;border:1px solid var(--line);border-radius:10px;
+      padding:10px;overflow:auto;font-size:12px;color:#b9c8da;max-height:260px}
+  .note{color:var(--dim);font-size:12px;margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>High Tech VPN v1.7 · 逆向演示面板</h1>
+  <div class="sub">包名 <code>com.hightech.vpn</code> · 基于 v2rayNG + sandok SocksHttp 外壳 · 节点目录由厂商 API 加密下发</div>
+</header>
+<div class="wrap">
+  <div class="row" style="margin-top:6px">
+    <button id="btn-refresh">↻ 实时拉取厂商配置</button>
+    <button id="btn-probe">⚡ 全部节点实时测活</button>
+    <span class="pill" id="stamp">—</span>
+  </div>
+
+  <div class="panel" style="margin-top:12px">
+    <b class="warn">⚠ 当前状态</b> —— <span id="banner">读取中…</span>
+    <div class="note">
+      绿灯 = 本机实测存活并拿到真实出口 IP；灰灯 = 待验证。
+      协议与节点参数来自解密厂商实时配置（已验证）；链路实测受厂商中继 <code>503</code> 阻塞，
+      详见仓库 <code>data/README.md</code>。测活前请确认 mihomo 的 socks 端口是你自己的进程在监听。
+    </div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="panel">
+    <h2>加密协议（libgojni.so :: AndroidLibXrayLite.DO）</h2>
+    <table>
+      <tr><th>环节</th><th>实现</th></tr>
+      <tr><td>信封</td><td><code>base64( [16B salt][12B nonce][ciphertext‖tag] )</code></td></tr>
+      <tr><td>KDF</td><td><code>argon2id(t=3, m=8192KiB, p=1, keyLen=32)</code>，口令 <code>NewDecryptLibPassword</code>（字段级用 <code>…PasswordII</code>）</td></tr>
+      <tr><td>对称</td><td><code>AES-256-GCM</code>，AAD = salt（raw[0:16]）</td></tr>
+      <tr><td>接口</td><td><code>GET https://strongteam.co/api/hightech/v1/</code> + 头 <code>User-Agent: High Tech VPN</code>（服务端按此校验 "App Code"）</td></tr>
+    </table>
+    <div class="note">字段级密文与整包密文使用同一算法、不同口令；每个 Server/Network 的 IP、UUID、用户名密码都是独立加密的。</div>
+    <pre id="rawlog">等待操作…</pre>
+  </div>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const log = m => { const el = $('#rawlog'); el.textContent = m + '\n' + el.textContent; };
+
+async function jget(u){ const r = await fetch(u); const t = await r.text();
+  try { return JSON.parse(t); } catch(e){ throw new Error(t.slice(0,200)); } }
+
+function card(n){
+  const alive = n.alive;
+  return `<div class="card" data-id="${n.id}">
+    <h3>${n.exit_cc || '??'} <span>${n.exit_ip || '未测'}</span>
+      <span class="tag">${n.kind}</span></h3>
+    <div class="sub" style="font-size:12px">${n.name}</div>
+    <div class="kv">
+      <span>前置地址</span><b>${n.addr}:${n.port}</b>
+      <span>SNI</span><b>${n.sni || '-'}</b>
+      <span>Host 头</span><b>${n.host || '-'}</b>
+      <span>LOCAL SOCKS</span><b>127.0.0.1:${n.socks_port || '-'}</b>
+      <span>出口 ISP</span><b>${n.exit_isp || '-'}</b>
+    </div>
+    <div class="row">
+      <span class="pill ${alive?'ok':'bad'}">${alive?'存活':'待验证'}</span>
+      <span class="pill">P50 ${n.lat_p50 ?? '-'} ms</span>
+      <span class="pill">并发 ${n.conc_ok ?? '-'}/${n.conc_total ?? '-'}</span>
+      <span class="pill">${n.dl_kbps ?? '-'} KB/s</span>
+      <button data-probe="${n.id}">测活</button>
+    </div>
+    <div class="sub" style="margin-top:10px;font-size:11.5px" data-out="${n.id}"></div>
+  </div>`;
+}
+
+async function load(){
+  const d = await jget('/api/nodes');
+  const ns = d.nodes || [];
+  $('#grid').innerHTML = ns.map(card).join('') || '<div class="card">无节点数据</div>';
+  $('#stamp').textContent = '节点 ' + ns.length + ' · ' + new Date().toLocaleTimeString();
+  const alive = ns.filter(n => n.alive).length;
+  const withBench = ns.filter(n => n.lat_p50 != null).length;
+  $('#banner').innerHTML = alive > 0
+    ? `<span class="ok">${alive}/${ns.length} 条本机实测存活</span>；带压测数据 ${withBench} 条（顺序 10 次 + 8 并发 + 3MB 吞吐）`
+    : `<span class="bad">0/${ns.length} 条实测存活</span> —— 节点参数已还原但链路当前不可用（厂商中继 503 / 未测活）。`;
+  document.querySelectorAll('[data-probe]').forEach(b=>{
+    b.onclick = async () => {
+      const id = b.dataset.probe; b.disabled = true;
+      const out = document.querySelector('[data-out="'+id+'"]');
+      out.textContent = '探测中…';
+      try{
+        const r = await jget('/api/probe?node='+encodeURIComponent(id));
+        out.innerHTML = r.ok ? `<span class="ok">● 出口 ${r.ip} (${r.cc})</span> · ${r.ms} ms · ${r.isp}`
+                             : `<span class="bad">● 失败</span> ${r.raw||''}`;
+        log('probe ' + id + ' → ' + JSON.stringify(r));
+      }catch(e){ out.innerHTML = '<span class="bad">'+e.message+'</span>'; }
+      b.disabled = false;
+    };
+  });
+}
+
+$('#btn-refresh').onclick = async () => {
+  const b = $('#btn-refresh'); b.disabled = true; log('拉取远端配置…');
+  try{
+    const r = await jget('/api/config');
+    log('远端配置: ' + JSON.stringify(r.summary));
+  }catch(e){ log('失败: ' + e.message); }
+  b.disabled = false;
+};
+
+$('#btn-probe').onclick = async () => {
+  const b = $('#btn-probe'); b.disabled = true;
+  for (const el of document.querySelectorAll('[data-probe]')){
+    el.click();
+    await new Promise(r=>setTimeout(r, 250));
+  }
+  b.disabled = false;
+};
+
+load().catch(e=>{ $('#grid').innerHTML = '<div class="card bad">'+e.message+'</div>'; });
+</script>
+</body>
+</html>

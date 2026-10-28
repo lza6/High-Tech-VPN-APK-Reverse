@@ -1,0 +1,11 @@
+# 运行期产物（含真实凭证，绝不入库）
+out/
+proxies.txt
+*.log
+__pycache__/
+*.pyc
+# APK 内受版权资产
+assets/
+*.apk
+*.ovpn
+!data/*.json

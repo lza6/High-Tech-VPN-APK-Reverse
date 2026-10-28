@@ -18,7 +18,11 @@ def main():
     ap.add_argument('--host', default='127.0.0.1')
     a = ap.parse_args()
 
-    ports = json.load(open(os.path.join(a.out_dir, 'ports.json')))
+    ports_path = os.path.join(a.out_dir, 'ports.json')
+    if not os.path.exists(ports_path):
+        sys.stderr.write('缺 %s —— 先跑 python tools/refresh.py --out-dir %s\n' % (ports_path, a.out_dir))
+        return 2
+    ports = json.load(open(ports_path))
     probe_path = os.path.join(a.out_dir, 'probe.json')
     probe = {}
     if os.path.exists(probe_path):
